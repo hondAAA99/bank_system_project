@@ -164,7 +164,7 @@ export const withDraw = async (req, res, next) => {
     model: transactionsModel,
     data: {
       accountId: getAccount.id,
-      type: transactionsTypeEnum.deposite,
+      type: transactionsTypeEnum.withDraw,
       amount: depositeAmount,
       balanceBefore: Number(getAccount.balance),
       balanceAfter: newAccountBalance.balance,
