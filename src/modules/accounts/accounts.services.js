@@ -2,12 +2,12 @@ import {
   ErrorInteralServerError,
   SuccessResponse,
 } from "../../common/utils/globalErrorHandling.js";
-import { find } from "../../DB/DB.services.js";
+import { find, findAll } from "../../DB/DB.services.js";
 import banckAccountModel from "../../DB/models/BankAccount.model.js";
 
 export const getAccount = async (req, res, next) => {
   const { user } = req;
-  const account = await find({
+  const account = await findAll({
     model: banckAccountModel,
     filter: {
       userId: user.id,
@@ -15,7 +15,7 @@ export const getAccount = async (req, res, next) => {
   });
 
   if (!account) {
-    ErrorInteralServerError("can not find the account");
+    ErrorInteralServerError("can not find any account");
   }
 
   SuccessResponse({ res, data: account });

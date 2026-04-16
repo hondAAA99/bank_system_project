@@ -3,6 +3,7 @@ import { transactionsTypeEnum } from "../../common/enum/transactions.type.enum.j
 import { transactionsStatusEnum } from "../../common/enum/transactionSttus.enum.js";
 import {
   ErrorConflict,
+  ErrorInteralServerError,
   SuccessResponse,
 } from "../../common/utils/globalErrorHandling.js";
 import {
@@ -14,6 +15,13 @@ import {
 } from "../../DB/DB.services.js";
 import banckAccountModel from "../../DB/models/BankAccount.model.js";
 import transactionsModel from "../../DB/models/Transactions.model.js";
+import {
+  checkAccountOwner,
+  getAccount,
+  checkAccountBalance,
+  updateAccountBalance,
+  createTransaction,
+} from "./services.helpers.js";
 
 export const getAllMyTransactions = async (req, res, next) => {
   const { user } = req;
@@ -54,123 +62,97 @@ export const getOneTransaction = async (req, res, next) => {
 
 export const deposite = async (req, res, next) => {
   const { user } = req;
-  const { accountNumber, depositeAmount } = req.body;
-  const bankAcounts = await find({
-    model: banckAccountModel,
-    filter: {
-      userId: user.id,
-    },
-    option: {
-      select: "accountNumber",
-    },
-  });
-  if (!bankAcounts.accountNumber.includes(accountNumber)) {
-    ErrorConflict("you can not deposit from this account");
-  }
-
-  const getAccount = await find({
-    model: banckAccountModel,
-    filter: {
-      accountNumber,
-    },
-  });
+  const { account, depositeAmount } = req.body;
+  await checkAccountOwner(account, user.id);
+  const getAccount = await getAccount(account);
 
   if (getAccount.status != banckAccountEnum.active) {
     ErrorConflict("you can not deposit from this account");
   }
-  if (getAccount.balance < depositeAmount) {
-    await create({
-      model: transactionsModel,
-      data: {
-        accountId: getAccount.id,
-        type: transactionsTypeEnum.deposite,
-        balanceBefore: getAccount.balance,
-        amount: depositeAmount,
-        balanceAfter: getAccount.balance,
-        status: transactionsStatusEnum.failed,
-      },
-    });
-    ErrorConflict("you dont have this amount of money");
-  }
-
-  const newAccountBalance = await findAndUpdate({
-    model: banckAccountModel,
-    filter: {
-      accountNumber,
-    },
-    update: {
-      balance: `${getAccount.balance - depositeAmount}`,
-    },
-    options: {
-      new: true,
-    },
+  await checkAccountBalance({ getAccount, depositeAmount });
+  const newAccountBalance = await updateAccountBalance({
+    accountNumber,
+    getAccount,
+    depositeAmount,
+    subject: transactionsTypeEnum.deposite,
   });
-
-  await create({
-    model: transactionsModel,
-    data: {
-      accountId: getAccount.id,
-      type: transactionsTypeEnum.deposite,
-      amount: depositeAmount,
-      balanceBefore: getAccount.balance,
-      balanceAfter: newAccountBalance.balance,
-      status: transactionsStatusEnum.complete,
-    },
+  const depositeTransaction = await createTransaction({
+    getAccount,
+    depositeAmount,
+    newAccountBalance,
+    type: transactionsTypeEnum.deposite,
   });
+  depositeTransaction.status = transactionsStatusEnum.complete;
+  depositeTransaction.save();
 
   SuccessResponse({ res, data: "deposite succeded" });
 };
 export const withDraw = async (req, res, next) => {
   const { user } = req;
-  const { accountNumber, depositeAmount } = req.body;
-  const bankAcounts = await find({
-    model: banckAccountModel,
-    filter: {
-      userId: user.id,
-    },
-    option: {
-      select: "accountNumber",
-    },
-  });
-  if (!bankAcounts.accountNumber.includes(accountNumber)) {
-    ErrorConflict("you can not withDraw to this account");
-  }
-
-  const getAccount = await find({
-    model: banckAccountModel,
-    filter: {
-      accountNumber,
-    },
-  });
-
+  const { account, depositeAmount } = req.body;
+  await checkAccountOwner(account , user.id);
+  const getAccount = await getAccount(account);
   if (getAccount.status != banckAccountEnum.active) {
-    ErrorConflict("you can not deposit from this account");
+    ErrorConflict("you can not withdraw to this account");
   }
-
-  const newAccountBalance = await findAndUpdate({
-    model: banckAccountModel,
-    filter: {
-      accountNumber,
-    },
-    update: {
-      balance: `${Number(getAccount.balance) + Number(depositeAmount)}`,
-    },
-    options: {
-      new: true,
-    },
+  const newAccountBalance = await updateAccountBalance({
+    accountNumber,
+    getAccount,
+    depositeAmount,
+    subject: transactionsTypeEnum.withDraw,
   });
-
-  await create({
-    model: transactionsModel,
-    data: {
-      accountId: getAccount.id,
-      type: transactionsTypeEnum.withDraw,
-      amount: depositeAmount,
-      balanceBefore: Number(getAccount.balance),
-      balanceAfter: newAccountBalance.balance,
-      status: transactionsStatusEnum.complete,
-    },
+  const withdrawTransaction = await createTransaction({
+    getAccount,
+    depositeAmount,
+    newAccountBalance,
+    type: transactionsTypeEnum.deposite,
   });
+      withdrawTransaction.status = transactionsStatusEnum.complete;
+      withdrawTransaction.save();
 
   SuccessResponse({ res, data: "withDraw succeded" });
+};
+export const transfer = async (req, res, next) => {
+  const { user } = req;
+  const { beneficiary, account, depositeAmount } = req.body;
+  await checkAccountOwner(account,user.id);
+  const getUserAcc = await getAccount(account);
+  if (getUserAcc.status != banckAccountEnum.active) {
+      ErrorConflict("you can not withdraw to this account");
+  }
+  await checkAccountBalance({ getUserAcc, depositeAmount });
+    const newDepositeAccountBalance = await updateAccountBalance({
+      account,
+      getUserAcc,
+      depositeAmount,
+      subject: transactionsTypeEnum.deposite,
+    });
+    const depositeTransaction = await createTransaction({
+      getUserAcc,
+      depositeAmount,
+      newAccountBalance : newDepositeAccountBalance,
+      type: transactionsTypeEnum.transfer,
+    });
+    const getBeneAccount = await getAccount(beneficiary);
+    if (getBeneAccount.status != banckAccountEnum.active) {
+      ErrorConflict("you can not withdraw to this account");
+    }
+    const newWithdrawAccountBalance = await updateAccountBalance({
+      account,
+      getUserAcc : getBeneAccount,
+      depositeAmount,
+      subject: transactionsTypeEnum.withDraw,
+    });
+    const withdrawTransaction = await createTransaction({
+      getUserAcc: getBeneAccount,
+      depositeAmount,
+      newAccountBalance: newWithdrawAccountBalance,
+      type: transactionsTypeEnum.transfer,
+    });
+    withdrawTransaction.status = transactionsStatusEnum.complete;
+    withdrawTransaction.save();
+    depositeTransaction.status = transactionsStatusEnum.complete;
+    depositeTransaction.save();
+    SuccessResponse({res, data : 'transaction succeded'})
+
 };

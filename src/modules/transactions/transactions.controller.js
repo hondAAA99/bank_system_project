@@ -1,14 +1,14 @@
 import { Router } from "express";
 import { authenticate } from "../../common/utils/security/authentication.js";
 import { validateMiddleWare } from "../../common/middleWare/validation.js";
-// import { getAllMyTransactionsScheam } from "./transaction.Schema.js";
 import {
   deposite,
   getAllMyTransactions,
   getOneTransaction,
+  transfer,
   withDraw,
 } from "./transactions.services.js";
-import { depostAndWithDrawSchmea } from "./transaction.Schema.js";
+import { depostAndWithDrawSchmea, transferSchmea } from "./transaction.Schema.js";
 
 const transactionsRouter = Router();
 
@@ -27,6 +27,12 @@ transactionsRouter.post(
   validateMiddleWare(depostAndWithDrawSchmea),
   authenticate,
   withDraw,
+);
+transactionsRouter.post(
+  "/transfer",
+  validateMiddleWare(transferSchmea),
+  authenticate,
+  transfer,
 );
 
 export default transactionsRouter;

@@ -9,7 +9,15 @@ import Joi from "joi";
 
 export const depostAndWithDrawSchmea = Joi.object({
   body: Joi.object({
-    accountNumber: Joi.string().required(),
+    account: Joi.string().required(),
+    depositeAmount: Joi.number().positive().required(),
+  }).required(),
+});
+
+export const transferSchmea = Joi.object({
+  body: Joi.object({
+    account: Joi.string().required(),
+    beneficiary: Joi.string().required(),
     depositeAmount: Joi.number().positive().required(),
   }).required(),
 });

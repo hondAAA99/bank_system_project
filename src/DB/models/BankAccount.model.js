@@ -24,7 +24,7 @@ const bankAccountsSchame = mongoose.Schema(
     },
   },
   {
-    timestampts: true,
+    timestamps: true,
     strictQuery: true,
     strict: true,
   },
